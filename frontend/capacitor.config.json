@@ -1,0 +1,4 @@
+{
+  "appId": "com.snapid.app", "appName": "SnapID", "webDir": "www",
+  "server": { "androidScheme": "https" }
+}
