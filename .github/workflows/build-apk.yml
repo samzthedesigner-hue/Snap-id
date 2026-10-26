@@ -86,14 +86,14 @@ jobs:
       - name: Prepare Release
         run: |
           mkdir -p out
-          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk out/SnapID-${{ github.run_number }}.apk
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk out/SnapID.apk
 
       - name: Upload APK to GitHub Releases
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: SnapID v1.0.${{ github.run_number }}
-          files: out/SnapID-${{ github.run_number }}.apk
+          files: out/SnapID.apk
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
