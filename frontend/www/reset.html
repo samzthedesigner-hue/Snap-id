@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset Password</title>
+<style>body { font-family: sans-serif; background: #0e1116; color: #fff; max-width: 400px; margin: 40px auto; padding: 20px; }
+.input { width: 100%; padding: 12px; border-radius: 10px; background: #0b0f14; border: 1px solid #232a34; color: #fff; margin-bottom: 12px; }
+.btn { width: 100%; padding: 14px; border-radius: 12px; background: #10b981; color: #000; font-weight: bold; border: none; }</style>
+</head>
+<body>
+  <h2 style="text-align:center;">Reset Password</h2>
+  <input type="password" id="newPassword" class="input" placeholder="New password (min 16 chars)">
+  <button class="btn" onclick="resetPw()">Reset</button>
+  <div id="msg" style="text-align:center; margin-top:15px;"></div>
+  <script>
+    const token = new URLSearchParams(window.location.search).get('token');
+    async function resetPw() {
+      const pw = document.getElementById('newPassword').value;
+      if (pw.length < 16) { document.getElementById('msg').innerText = "Must be 16+ characters"; return; }
+      const fd = new FormData(); fd.append("token", token); fd.append("new_password", pw);
+      const r = await fetch("https://snapid-api.onrender.com/reset-password", { method: "POST", body: fd });
+      document.getElementById('msg').innerText = r.ok ? "✅ Reset! Return to app." : "Failed.";
+    }
+  </script>
+</body>
+</html>
