@@ -4,7 +4,7 @@ const APP_CONFIG = {
   WHATSAPP: "2348027363235",
   OWNER_EMAIL: "samuelobadimeji500@gmail.com",
   GITHUB_USER: "samzthedesigner-hue",
-  GITHUB_REPO: "Snap-id", // 👈 Fixed to match your exact GitHub repo name
+  GITHUB_REPO: "Snap-id",
   PLANS: { "3-hour": { price: 800 }, "daily": { price: 1500 }, "weekly": { price: 3500 }, "monthly": { price: 8000 }, "yearly": { price: 32000 } }
 };
 
@@ -42,7 +42,6 @@ function isActive() { return parseInt(localStorage.getItem(LS_EXP) || "0", 10) >
 // ---------- STEALTH WAKE (BACKGROUND) ----------
 async function stealthWake() {
   try {
-    // Pings the backend in the background to wake up Render
     await fetch(APP_CONFIG.BACKEND_URL + "/wake");
   } catch (_) {}
 }
@@ -77,30 +76,31 @@ async function checkForUpdates() {
 
 // ---------- BOOT ----------
 async function boot() {
-  // 1. Instantly hide splash and show login/app
-  $("splash").classList.add("hidden");
-
-  // 2. Wake server & Check updates in the background
-  stealthWake();
-  checkForUpdates();
-
-  const session = localStorage.getItem(LS_SESSION);
-  const email = localStorage.getItem("__email");
-
-  if (!session) {
-    $("loginScreen").classList.remove("hidden");
-    wireUi(); 
-    return;
-  }
-
-  // Owner Bypass
-  if (email === APP_CONFIG.OWNER_EMAIL) {
-    unlockApp(); 
-    wireUi(); 
-    return;
-  }
+  // 🚨 SAFETY NET: Force splash to hide after 3 seconds no matter what
+  setTimeout(() => { $("splash").classList.add("hidden"); }, 3000);
 
   try {
+    stealthWake();
+    checkForUpdates();
+
+    const session = localStorage.getItem(LS_SESSION);
+    const email = localStorage.getItem("__email");
+
+    if (!session) {
+      $("splash").classList.add("hidden"); 
+      $("loginScreen").classList.remove("hidden");
+      wireUi(); 
+      return;
+    }
+
+    // Owner Bypass
+    if (email === APP_CONFIG.OWNER_EMAIL) {
+      $("splash").classList.add("hidden");
+      unlockApp(); 
+      wireUi(); 
+      return;
+    }
+
     const r = await fetch(APP_CONFIG.BACKEND_URL + "/me", { headers: { "X-Session": session } });
     if (r.ok) {
       const d = await r.json();
@@ -108,18 +108,25 @@ async function boot() {
       if (d.expires_at) { 
         localStorage.setItem(LS_EXP, String(d.expires_at)); 
         localStorage.setItem(LS_PLAN, d.plan); 
+        $("splash").classList.add("hidden");
         unlockApp(); 
         scheduleExpiry(d.expires_at); 
       } else { 
+        $("splash").classList.add("hidden");
         unlockApp(); 
       }
     } else { 
       localStorage.removeItem(LS_SESSION); 
+      $("splash").classList.add("hidden");
       $("loginScreen").classList.remove("hidden"); 
     }
-  } catch (_) { 
+  } catch (error) {
+    console.error("Boot error:", error);
+    // If the server is asleep or fails, drop them at the login screen anyway
+    $("splash").classList.add("hidden"); 
     $("loginScreen").classList.remove("hidden"); 
   }
+  
   wireUi();
 }
 document.addEventListener("DOMContentLoaded", boot);
@@ -378,7 +385,7 @@ function wireUi() {
   c.onmouseup = c.ontouchend = () => draw = false;
   $("sigClear").onclick = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 320, 160); };
   
-  ("receiptInput").onchange = async e => {
+  $("receiptInput").onchange = async e => {
     const f = e.target.files[0]; if (!f || !selectedPlan) return;
     showLoader("Verifying..."); const fd = new FormData(); fd.append("file", f); fd.append("plan", selectedPlan); fd.append("device_id", await getDeviceId()); fd.append("session", localStorage.getItem(LS_SESSION));
     try {
