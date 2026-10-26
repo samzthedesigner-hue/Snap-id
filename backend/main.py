@@ -17,7 +17,7 @@ ACCOUNT_NAME = os.environ.get("ACCOUNT_NAME", "Obadimeji Samuel Oluwasogo")
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev-only-change-me")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://snapid.vercel.app")
-DATABASE_URL = "https://icyfdieojdcbswqjfmbu.supabase.co"
+DATABASE_URL = "https://icyfdieojdcbswqjfmbu.supabase.com"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljeWZkaWVvamRjYnN3cWpmbWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwMTkyNDQsImV4cCI6MjEwODU5NTI0NH0.lOCuHvvkPueHk9qTgOqd__8WqpIuik9QEW1Lwn1Vuec" # Paste your Anon Key here
 
 OWNER_EMAIL = "samuelobadimeji500@gmail.com"
