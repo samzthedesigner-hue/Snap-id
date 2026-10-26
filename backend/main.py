@@ -352,3 +352,8 @@ async def verify_receipt(file: UploadFile = File(...), plan: str = Form(...), de
             db_execute("INSERT INTO plans(user_id, plan, expires_at, receipt_hash, created_at) VALUES (%s,%s,%s,%s,%s)", (user_id, plan, float(exp), h, time.time()))
     act, kill = _issue_tokens(device_id, user_id, plan, exp)
     return {"ok": True, "activate_token": act, "kill_token": kill, "expires_at": exp * 1000, "plan": plan}
+    if __name__ == "__main__":
+    import uvicorn
+    # Render uses port 10000 by default for web services
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
