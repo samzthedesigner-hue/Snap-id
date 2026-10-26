@@ -1,8 +1,10 @@
 const APP_CONFIG = {
-  APP_NAME: "SnapID", BACKEND_URL: "https://snap-id.onrender.com", WHATSAPP: "2348027363235",
+  APP_NAME: "SnapID", 
+  BACKEND_URL: "https://snap-id.onrender.com", 
+  WHATSAPP: "2348027363235",
   OWNER_EMAIL: "samuelobadimeji500@gmail.com",
   GITHUB_USER: "samzthedesigner-hue",
-  GITHUB_REPO: "snapid",
+  GITHUB_REPO: "Snap-id", // 👈 Fixed to match your exact GitHub repo name
   PLANS: { "3-hour": { price: 800 }, "daily": { price: 1500 }, "weekly": { price: 3500 }, "monthly": { price: 8000 }, "yearly": { price: 32000 } }
 };
 
@@ -37,6 +39,14 @@ function scheduleExpiry(expiresMs) {
 }
 function isActive() { return parseInt(localStorage.getItem(LS_EXP) || "0", 10) > Date.now(); }
 
+// ---------- STEALTH WAKE (BACKGROUND) ----------
+async function stealthWake() {
+  try {
+    // Pings the backend in the background to wake up Render
+    await fetch(APP_CONFIG.BACKEND_URL + "/wake");
+  } catch (_) {}
+}
+
 // ---------- AUTO UPDATER ----------
 async function checkForUpdates() {
   try {
@@ -67,27 +77,49 @@ async function checkForUpdates() {
 
 // ---------- BOOT ----------
 async function boot() {
-  await checkForUpdates();
+  // 1. Instantly hide splash and show login/app
+  $("splash").classList.add("hidden");
+
+  // 2. Wake server & Check updates in the background
+  stealthWake();
+  checkForUpdates();
 
   const session = localStorage.getItem(LS_SESSION);
   const email = localStorage.getItem("__email");
 
   if (!session) {
-    $("splash").classList.add("hidden"); $("loginScreen").classList.remove("hidden");
-    wireUi(); return;
+    $("loginScreen").classList.remove("hidden");
+    wireUi(); 
+    return;
   }
+
+  // Owner Bypass
   if (email === APP_CONFIG.OWNER_EMAIL) {
-    unlockApp(); $("splash").classList.add("hidden"); wireUi(); return;
+    unlockApp(); 
+    wireUi(); 
+    return;
   }
+
   try {
     const r = await fetch(APP_CONFIG.BACKEND_URL + "/me", { headers: { "X-Session": session } });
     if (r.ok) {
       const d = await r.json();
       $("menuEmail").textContent = d.email;
-      if (d.expires_at) { localStorage.setItem(LS_EXP, String(d.expires_at)); localStorage.setItem(LS_PLAN, d.plan); unlockApp(); scheduleExpiry(d.expires_at); }
-      else { unlockApp(); }
-    } else { localStorage.removeItem(LS_SESSION); $("splash").classList.add("hidden"); $("loginScreen").classList.remove("hidden"); }
-  } catch (_) { $("splash").classList.add("hidden"); $("loginScreen").classList.remove("hidden"); }
+      if (d.expires_at) { 
+        localStorage.setItem(LS_EXP, String(d.expires_at)); 
+        localStorage.setItem(LS_PLAN, d.plan); 
+        unlockApp(); 
+        scheduleExpiry(d.expires_at); 
+      } else { 
+        unlockApp(); 
+      }
+    } else { 
+      localStorage.removeItem(LS_SESSION); 
+      $("loginScreen").classList.remove("hidden"); 
+    }
+  } catch (_) { 
+    $("loginScreen").classList.remove("hidden"); 
+  }
   wireUi();
 }
 document.addEventListener("DOMContentLoaded", boot);
@@ -202,6 +234,7 @@ async function passportGo() {
     const url = URL.createObjectURL(await r.blob());
     $("ppResult").innerHTML = `<img src="${url}"><a class="download-link" href="${url}" download="passport.jpg">⬇ Download</a>`;
     if (r.headers.get("X-Free-Used") === "1") showPremiumPrompt();
+    maybeShowRating();
   } catch (_) { hideLoader(); $("ppResult").innerHTML = `<div class="err">Error</div>`; }
 }
 
@@ -214,6 +247,7 @@ async function signatureGo() {
     const url = URL.createObjectURL(await r.blob());
     $("sigResult").innerHTML = `<img src="${url}" style="background:transparent"><a class="download-link" href="${url}" download="sig.png">⬇ Download</a>`;
     if (r.headers.get("X-Free-Used") === "1") showPremiumPrompt();
+    maybeShowRating();
   } catch (_) { hideLoader(); $("sigResult").innerHTML = `<div class="err">Error</div>`; }
 }
 
@@ -226,6 +260,7 @@ async function scanGo() {
     const url = URL.createObjectURL(await r.blob());
     $("scanResult").innerHTML = `<a class="download-link" href="${url}" download="scan.pdf">⬇ Download PDF</a>`;
     if (r.headers.get("X-Free-Used") === "1") showPremiumPrompt();
+    maybeShowRating();
   } catch (_) { hideLoader(); $("scanResult").innerHTML = `<div class="err">Error</div>`; }
 }
 
@@ -238,6 +273,7 @@ async function ninGo() {
     const url = URL.createObjectURL(await r.blob());
     $("ninResult").innerHTML = `<img src="${url}"><a class="download-link" href="${url}" download="nin.jpg">⬇ Download</a>`;
     if (r.headers.get("X-Free-Used") === "1") showPremiumPrompt();
+    maybeShowRating();
   } catch (_) { hideLoader(); $("ninResult").innerHTML = `<div class="err">Error</div>`; }
 }
 
@@ -251,6 +287,7 @@ async function cvGo() {
     const url = URL.createObjectURL(await r.blob());
     $("cvResult").innerHTML = `<a class="download-link" href="${url}" download="cv.pdf">⬇ Download CV</a>`;
     if (r.headers.get("X-Free-Used") === "1") showPremiumPrompt();
+    maybeShowRating();
   } catch (_) { hideLoader(); $("cvResult").innerHTML = `<div class="err">Error</div>`; }
 }
 
@@ -315,17 +352,23 @@ function wireUi() {
   $("cancelPay").onclick = () => { $("paymentBox").classList.add("hidden"); document.querySelector(".plans").classList.remove("hidden"); };
   $("supportBtn").onclick = () => window.open("https://wa.me/2348027363235", "_blank");
   $("renewBtn").onclick = () => lockApp();
+  
   $("ppCameraBtn").onclick = () => openCamera(f => { selectedFiles.pp = f; alert("Photo ready!"); });
   $("ppFile").onchange = e => selectedFiles.pp = e.target.files[0];
   $("ppGo").onclick = passportGo;
+  
   $("sigGo").onclick = signatureGo;
+  
   $("scanCameraBtn").onclick = () => openCamera(f => { selectedFiles.scan = f; alert("Doc ready!"); }, "environment");
   $("scanFile").onchange = e => selectedFiles.scan = e.target.files[0];
   $("scanGo").onclick = scanGo;
+  
   $("ninCameraBtn").onclick = () => openCamera(f => { selectedFiles.nin = f; alert("NIN ready!"); }, "environment");
   $("ninFile").onchange = e => selectedFiles.nin = e.target.files[0];
   $("ninGo").onclick = ninGo;
+  
   $("cvGo").onclick = cvGo;
+  
   $("cameraCancel").onclick = closeCamera; $("cameraCapture").onclick = capturePhoto;
   
   const c = $("sigCanvas"), ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 320, 160); ctx.strokeStyle = "#000"; ctx.lineWidth = 3;
@@ -335,7 +378,7 @@ function wireUi() {
   c.onmouseup = c.ontouchend = () => draw = false;
   $("sigClear").onclick = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 320, 160); };
   
-  $("receiptInput").onchange = async e => {
+  ("receiptInput").onchange = async e => {
     const f = e.target.files[0]; if (!f || !selectedPlan) return;
     showLoader("Verifying..."); const fd = new FormData(); fd.append("file", f); fd.append("plan", selectedPlan); fd.append("device_id", await getDeviceId()); fd.append("session", localStorage.getItem(LS_SESSION));
     try {
@@ -345,4 +388,4 @@ function wireUi() {
       unlockApp(); scheduleExpiry(data.expires_at);
     } catch (_) { hideLoader(); alert("Error"); }
   };
-      }
+}
