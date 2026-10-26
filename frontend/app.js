@@ -38,6 +38,12 @@ function scheduleExpiry(expiresMs) {
   expiryTimer = setTimeout(() => { lockApp(); alert("Your plan expired."); }, Math.min(ms, 2147483000));
 }
 function isActive() { return parseInt(localStorage.getItem(LS_EXP) || "0", 10) > Date.now(); }
+function showLoginScreen() {
+  $("splash").style.display = "none";
+  $("app").classList.add("hidden");
+  $("paywall").classList.add("hidden");
+  $("loginScreen").classList.remove("hidden");
+}
 
 // ---------- STEALTH WAKE (BACKGROUND) ----------
 async function stealthWake() {
@@ -76,55 +82,55 @@ async function checkForUpdates() {
 
 // ---------- BOOT ----------
 async function boot() {
-  // 🚨 SAFETY NET: Force splash to hide after 3 seconds no matter what
-  setTimeout(() => { $("splash").classList.add("hidden"); }, 3000);
-
   try {
     stealthWake();
     checkForUpdates();
 
     const session = localStorage.getItem(LS_SESSION);
-    const email = localStorage.getItem("__email");
-
+    
+    // 1. If no session, show login screen immediately
     if (!session) {
-      $("splash").classList.add("hidden"); 
-      $("loginScreen").classList.remove("hidden");
+      showLoginScreen();
       wireUi(); 
       return;
     }
 
-    // Owner Bypass
-    if (email === APP_CONFIG.OWNER_EMAIL) {
-      $("splash").classList.add("hidden");
-      unlockApp(); 
-      wireUi(); 
-      return;
-    }
-
+    // 2. If session exists, check who it is
     const r = await fetch(APP_CONFIG.BACKEND_URL + "/me", { headers: { "X-Session": session } });
+    
     if (r.ok) {
       const d = await r.json();
+      
+      localStorage.setItem("__email", d.email);
       $("menuEmail").textContent = d.email;
-      if (d.expires_at) { 
+
+      // 👑 OWNER CHECK: If it's your email, unlock immediately
+      if (d.email === APP_CONFIG.OWNER_EMAIL) {
+        $("splash").style.display = "none";
+        unlockApp();
+      } 
+      // Normal user with active plan
+      else if (d.expires_at) { 
         localStorage.setItem(LS_EXP, String(d.expires_at)); 
         localStorage.setItem(LS_PLAN, d.plan); 
-        $("splash").classList.add("hidden");
+        $("splash").style.display = "none";
         unlockApp(); 
         scheduleExpiry(d.expires_at); 
-      } else { 
-        $("splash").classList.add("hidden");
+      } 
+      // Normal user with no plan (free mode)
+      else { 
+        $("splash").style.display = "none";
         unlockApp(); 
       }
     } else { 
+      // Session expired or invalid
       localStorage.removeItem(LS_SESSION); 
-      $("splash").classList.add("hidden");
-      $("loginScreen").classList.remove("hidden"); 
+      showLoginScreen(); 
     }
   } catch (error) {
     console.error("Boot error:", error);
-    // If the server is asleep or fails, drop them at the login screen anyway
-    $("splash").classList.add("hidden"); 
-    $("loginScreen").classList.remove("hidden"); 
+    // If server is asleep or errors, fallback to login screen
+    showLoginScreen(); 
   }
   
   wireUi();
@@ -157,7 +163,14 @@ async function doLogin() {
     if (!r.ok) { status.textContent = data.detail || "Failed"; return; }
     localStorage.setItem(LS_SESSION, data.session_token); localStorage.setItem("__email", data.email);
     $("menuEmail").textContent = data.email;
-    if (data.email === APP_CONFIG.OWNER_EMAIL) { if (data.activate_token) localStorage.setItem(LS_ACT, data.activate_token); unlockApp(); return; }
+    
+    // Owner Bypass on Login
+    if (data.email === APP_CONFIG.OWNER_EMAIL) { 
+      if (data.activate_token) localStorage.setItem(LS_ACT, data.activate_token); 
+      unlockApp(); 
+      return; 
+    }
+    
     if (data.activate_token) {
       localStorage.setItem(LS_ACT, data.activate_token); localStorage.setItem(LS_EXP, String(data.expires_at)); localStorage.setItem(LS_PLAN, data.plan);
       unlockApp(); scheduleExpiry(data.expires_at);
@@ -176,7 +189,13 @@ async function doRegister() {
     if (!r.ok) { status.textContent = data.detail || "Failed"; return; }
     localStorage.setItem(LS_SESSION, data.session_token); localStorage.setItem("__email", data.email);
     $("menuEmail").textContent = data.email;
-    lockApp();
+    
+    // If the owner registers, bypass paywall immediately
+    if (data.email === APP_CONFIG.OWNER_EMAIL) {
+       unlockApp();
+    } else {
+       lockApp();
+    }
   } catch (_) { status.textContent = "Network error"; }
 }
 
@@ -395,4 +414,4 @@ function wireUi() {
       unlockApp(); scheduleExpiry(data.expires_at);
     } catch (_) { hideLoader(); alert("Error"); }
   };
-}
+    }
