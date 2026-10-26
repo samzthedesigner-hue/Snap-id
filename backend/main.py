@@ -17,8 +17,9 @@ ACCOUNT_NAME = os.environ.get("ACCOUNT_NAME", "Obadimeji Samuel Oluwasogo")
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev-only-change-me")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://snapid.vercel.app")
+
+# Database Connection (Hardcoded with URL-encoded password)
 DATABASE_URL = "postgresql://postgres.icyfdieojdcbswqjfmbu:UZ%7D%2Ek%3C%7C%2B32GN4%60f%3A%22%2AWw0JjZ%3Eyu1ReTY@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljeWZkaWVvamRjYnN3cWpmbWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwMTkyNDQsImV4cCI6MjEwODU5NTI0NH0.lOCuHvvkPueHk9qTgOqd__8WqpIuik9QEW1Lwn1Vuec" # Paste your Anon Key here
 
 OWNER_EMAIL = "samuelobadimeji500@gmail.com"
 
@@ -29,46 +30,66 @@ PLANS = {
     "monthly": {"price": 8000, "seconds": 30 * 24 * 60 * 60},
     "yearly": {"price": 32000, "seconds": 365 * 24 * 60 * 60},
 }
+
 # ============================================================
 # DATABASE (SUPABASE)
 # ============================================================
-if not DATABASE_URL: raise RuntimeError("DATABASE_URL required.")
 def _pg():
-    conn = psycopg2.connect(DATABASE_URL); conn.autocommit = True
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = True
     return conn, psycopg2.extras.RealDictCursor
 
 def db_init():
-    conn, _ = _pg(); cur = conn.cursor()
-    cur.execute("""CREATE TABLE IF NOT EXISTS users (id BIGSERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at DOUBLE PRECISION)""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, device_id TEXT NOT NULL, created_at DOUBLE PRECISION, expires_at DOUBLE PRECISION, is_active BOOLEAN DEFAULT TRUE)""")
-    cur.execute("""CREATE UNIQUE INDEX IF NOT EXISTS one_active_session_per_user ON sessions(user_id) WHERE is_active = TRUE""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS plans (id BIGSERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, plan TEXT NOT NULL, expires_at DOUBLE PRECISION NOT NULL, receipt_hash TEXT, created_at DOUBLE PRECISION)""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS free_uses (user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, tool TEXT NOT NULL, used_at DOUBLE PRECISION, PRIMARY KEY (user_id, tool))""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS generations (id BIGSERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, tool TEXT NOT NULL, filename TEXT NOT NULL, file_data TEXT NOT NULL, created_at DOUBLE PRECISION)""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS password_resets (token TEXT PRIMARY KEY, user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, expires_at DOUBLE PRECISION, used BOOLEAN DEFAULT FALSE)""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS used_receipts (hash TEXT PRIMARY KEY, created_at DOUBLE PRECISION)""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS user_activity (user_id BIGINT PRIMARY KEY, last_active DOUBLE PRECISION, winback_sent BOOLEAN DEFAULT FALSE)""")
-    cur.execute("""CREATE TABLE IF NOT EXISTS ratings (id BIGSERIAL PRIMARY KEY, stars INT NOT NULL, comment TEXT, device_id TEXT, created_at DOUBLE PRECISION)""")
-    cur.close(); conn.close()
+    try:
+        conn, _ = _pg()
+        cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS users (id BIGSERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at DOUBLE PRECISION)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, device_id TEXT NOT NULL, created_at DOUBLE PRECISION, expires_at DOUBLE PRECISION, is_active BOOLEAN DEFAULT TRUE)""")
+        cur.execute("""CREATE UNIQUE INDEX IF NOT EXISTS one_active_session_per_user ON sessions(user_id) WHERE is_active = TRUE""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS plans (id BIGSERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, plan TEXT NOT NULL, expires_at DOUBLE PRECISION NOT NULL, receipt_hash TEXT, created_at DOUBLE PRECISION)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS free_uses (user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, tool TEXT NOT NULL, used_at DOUBLE PRECISION, PRIMARY KEY (user_id, tool))""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS generations (id BIGSERIAL PRIMARY KEY, user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, tool TEXT NOT NULL, filename TEXT NOT NULL, file_data TEXT NOT NULL, created_at DOUBLE PRECISION)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS password_resets (token TEXT PRIMARY KEY, user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, expires_at DOUBLE PRECISION, used BOOLEAN DEFAULT FALSE)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS used_receipts (hash TEXT PRIMARY KEY, created_at DOUBLE PRECISION)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS user_activity (user_id BIGINT PRIMARY KEY, last_active DOUBLE PRECISION, winback_sent BOOLEAN DEFAULT FALSE)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS ratings (id BIGSERIAL PRIMARY KEY, stars INT NOT NULL, comment TEXT, device_id TEXT, created_at DOUBLE PRECISION)""")
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+
 db_init()
 
 def db_fetch_one(sql, params=()):
-    conn, cf = _pg(); cur = conn.cursor(cursor_factory=cf)
-    cur.execute(sql, params); row = cur.fetchone(); cur.close(); conn.close()
+    conn, cf = _pg()
+    cur = conn.cursor(cursor_factory=cf)
+    cur.execute(sql, params)
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
     return dict(row) if row else None
 
 def db_fetch_all(sql, params=()):
-    conn, cf = _pg(); cur = conn.cursor(cursor_factory=cf)
-    cur.execute(sql, params); rows = cur.fetchall(); cur.close(); conn.close()
+    conn, cf = _pg()
+    cur = conn.cursor(cursor_factory=cf)
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
     return [dict(r) for r in rows]
 
 def db_execute(sql, params=()):
-    conn, _ = _pg(); cur = conn.cursor(); cur.execute(sql, params); cur.close(); conn.close()
+    conn, _ = _pg()
+    cur = conn.cursor()
+    cur.execute(sql, params)
+    cur.close()
+    conn.close()
 
 # ============================================================
 # HELPERS
 # ============================================================
 def _hash_pw(pw): return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
 def _check_pw(pw, h):
     try: return bcrypt.checkpw(pw.encode(), h.encode())
     except: return False
@@ -102,7 +123,7 @@ def send_email(to, subject, html_content):
     except: pass
 
 # ============================================================
-# APP & ERROR ALERTS
+# APP
 # ============================================================
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -116,6 +137,7 @@ async def error_handler(request, call_next):
 
 @app.get("/")
 def root(): return {"status": "ok"}
+
 @app.get("/wake")
 def wake(): return {"awake": True}
 
@@ -149,7 +171,9 @@ def verify_token_or_free(tool):
 
         if authorization and authorization.startswith("Bearer "):
             try:
-                payload = verify_token(authorization, x_device_id, x_session); payload["_free"] = False; return payload
+                payload = verify_token(authorization, x_device_id, x_session)
+                payload["_free"] = False
+                return payload
             except HTTPException as e:
                 if "expired" in str(e.detail).lower(): raise
                 
@@ -187,11 +211,15 @@ async def login(email: str = Form(...), password: str = Form(...), device_id: st
     plan_row = db_fetch_one("SELECT plan, expires_at FROM plans WHERE user_id=%s AND expires_at>%s ORDER BY expires_at DESC LIMIT 1", (user["id"], time.time()))
     at = kt = ems = pname = None
     if email == OWNER_EMAIL:
-        exp_ts = int(time.time()) + (3650 * 24 * 3600); pname = "Owner"
-        at, kt = _issue_tokens(device_id, user["id"], pname, exp_ts); ems = exp_ts * 1000
+        exp_ts = int(time.time()) + (3650 * 24 * 3600)
+        pname = "Owner"
+        at, kt = _issue_tokens(device_id, user["id"], pname, exp_ts)
+        ems = exp_ts * 1000
     elif plan_row:
-        exp_ts = int(plan_row["expires_at"]); pname = plan_row["plan"]
-        at, kt = _issue_tokens(device_id, user["id"], pname, exp_ts); ems = exp_ts * 1000
+        exp_ts = int(plan_row["expires_at"])
+        pname = plan_row["plan"]
+        at, kt = _issue_tokens(device_id, user["id"], pname, exp_ts)
+        ems = exp_ts * 1000
     return {"ok": True, "email": user["email"], "session_token": token, "activate_token": at, "kill_token": kt, "expires_at": ems, "plan": pname}
 
 @app.post("/forgot-password")
@@ -233,7 +261,7 @@ async def rate(stars: int = Form(...), comment: str = Form(""), device_id: str =
 @app.get("/cron-check")
 async def cron_check():
     now = time.time()
-    inactive = db_fetch_all("SELECT u.email FROM users u JOIN user_activity a ON u.id = a.user_id WHERE (? - a.last_active) > 604800 AND a.winback_sent = FALSE", (now,))
+    inactive = db_fetch_all("SELECT u.email FROM users u JOIN user_activity a ON u.id = a.user_id WHERE (%s - a.last_active) > 604800 AND a.winback_sent = FALSE", (now,))
     for u in inactive:
         send_email(u["email"], "We miss you at SnapID! 💚", f"<p>Come back and get 3 hours for ₦500.</p><p><a href='{FRONTEND_URL}' style='background:#10b981;color:#fff;padding:10px 20px;text-decoration:none;border-radius:5px;'>Claim Offer</a></p>")
         db_execute("UPDATE user_activity SET winback_sent=TRUE WHERE user_id=(SELECT id FROM users WHERE email=%s)", (u["email"],))
@@ -245,14 +273,18 @@ async def cron_check():
 PASSPORT_SPECS = {"2x2": (600, 600, 240), "1x1": (300, 300, 100), "jamb": (400, 400, 50), "nysc": (300, 300, 100), "nin": (300, 300, 50), "waec": (275, 354, 50), "ngpassport": (400, 400, 100), "bvn": (400, 400, 100), "usvisa": (600, 600, 240), "ukpassport": (600, 750, 240), "schengen": (413, 531, 240), "canada": (420, 540, 240)}
 
 def _read(b): return ImageOps.exif_transpose(Image.open(io.BytesIO(b)))
+
 def _to_bytes(img, fmt="PNG", quality=95):
     buf = io.BytesIO()
     if fmt.upper() == "JPEG" and img.mode in ("RGBA", "P"): img = img.convert("RGB")
-    img.save(buf, format=fmt, quality=quality); return buf.getvalue()
+    img.save(buf, format=fmt, quality=quality)
+    return buf.getvalue()
+
 def _compress(img, target_kb, fmt="JPEG"):
     lo, hi, best = 10, 95, None
     for _ in range(8):
-        q = (lo + hi) // 2; data = _to_bytes(img, fmt=fmt, quality=q)
+        q = (lo + hi) // 2
+        data = _to_bytes(img, fmt=fmt, quality=q)
         if len(data) / 1024 <= target_kb: best = data; lo = q + 1
         else: hi = q - 1
     return best or _to_bytes(img, fmt=fmt, quality=10)
@@ -352,8 +384,11 @@ async def verify_receipt(file: UploadFile = File(...), plan: str = Form(...), de
             db_execute("INSERT INTO plans(user_id, plan, expires_at, receipt_hash, created_at) VALUES (%s,%s,%s,%s,%s)", (user_id, plan, float(exp), h, time.time()))
     act, kill = _issue_tokens(device_id, user_id, plan, exp)
     return {"ok": True, "activate_token": act, "kill_token": kill, "expires_at": exp * 1000, "plan": plan}
-    if __name__ == "__main__":
+
+# ============================================================
+# RUN SERVER (Must be at the very bottom, no indentation)
+# ===========================================================
+if __name__ == "__main__":
     import uvicorn
-    # Render uses port 10000 by default for web services
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
