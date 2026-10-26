@@ -1,5 +1,5 @@
 const APP_CONFIG = {
-  APP_NAME: "SnapID", BACKEND_URL: "https://snap-id-api.onrender.com", WHATSAPP: "2348027363235",
+  APP_NAME: "SnapID", BACKEND_URL: "https://snap-id.onrender.com", WHATSAPP: "2348027363235",
   OWNER_EMAIL: "samuelobadimeji500@gmail.com",
   GITHUB_USER: "samzthedesigner-hue",
   GITHUB_REPO: "snapid",
