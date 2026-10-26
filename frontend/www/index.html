@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>SnapID</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="splash" class="splash">
+  <div class="logo">📸 SnapID</div>
+  <div class="sub">Document tools in one app</div>
+</div>
+
+<div id="cameraModal" class="camera-modal hidden">
+  <video id="cameraVideo" autoplay playsinline></video>
+  <div class="camera-overlay"><div class="camera-frame" id="cameraFrame"></div></div>
+  <div class="camera-controls">
+    <button id="cameraCancel" class="camera-btn">✕</button>
+    <button id="cameraCapture" class="camera-capture-btn"></button>
+    <button id="cameraSwitch" class="camera-btn">🔄</button>
+  </div>
+  <canvas id="cameraCanvas" class="hidden"></canvas>
+</div>
+
+<div id="loginScreen" class="paywall hidden">
+  <div class="paywall-header">
+    <div class="logo-small">📸 SnapID</div>
+    <h2 id="authTitle">Welcome</h2>
+  </div>
+  
+  <div id="authButtons">
+    <button class="btn" onclick="showForm('login')">Log In</button>
+    <button class="btn secondary" onclick="showForm('register')">Create Account</button>
+  </div>
+
+  <div id="authForm" class="hidden" style="margin-top:20px;">
+    <input class="input" id="loginEmail" type="email" placeholder="Email" autocomplete="email" />
+    <input class="input" id="loginPassword" type="password" placeholder="Password (min 16 characters)" autocomplete="current-password" />
+    <div id="loginStatus" class="verify-status"></div>
+    <button class="btn" id="loginBtn">Log In</button>
+    <button class="btn secondary" id="registerBtn">Create Account</button>
+    <button class="btn ghost" id="forgotBtn">Forgot password?</button>
+    <button class="btn ghost" onclick="document.getElementById('authForm').classList.add('hidden'); document.getElementById('authButtons').classList.remove('hidden');">Back</button>
+  </div>
+</div>
+
+<div id="paywall" class="paywall hidden">
+  <div class="paywall-header">
+    <div class="logo-small">📸 SnapID</div>
+    <h2>Choose a plan</h2>
+    <p class="muted">Unlimited access to all 5 tools</p>
+  </div>
+  <div class="plans">
+    <button class="plan" data-plan="3-hour"><span>3-Hour</span><b>₦800</b></button>
+    <button class="plan" data-plan="daily"><span>Daily</span><b>₦1,500</b></button>
+    <button class="plan" data-plan="weekly"><span>Weekly</span><b>₦3,500</b></button>
+    <button class="plan popular" data-plan="monthly"><span>Monthly</span><b>₦8,000</b><em>Best value</em></button>
+    <button class="plan" data-plan="yearly"><span>Yearly</span><b>₦32,000</b></button>
+  </div>
+  <div id="paymentBox" class="payment-box hidden">
+    <h3>Pay for <span id="payPlanLabel"></span></h3>
+    <div class="bank-info">
+      <div><span>Bank</span><b>Moniepoint</b></div>
+      <div><span>Account No</span><b>6964461874</b></div>
+      <div><span>Account Name</span><b>Obadimeji Samuel Oluwasogo</b></div>
+      <div><span>Amount</span><b id="payAmount" class="amount"></b></div>
+    </div>
+    <label class="upload-receipt"><span>🧾 Upload payment receipt</span><input type="file" id="receiptInput" accept="image/*" hidden /></label>
+    <div id="verifyStatus" class="verify-status"></div>
+    <button class="btn ghost" id="cancelPay">Cancel</button>
+  </div>
+</div>
+
+<div id="ratingModal" class="modal hidden">
+  <div class="modal-card">
+    <h3>How's SnapID so far?</h3>
+    <div class="stars" id="ratingStars">
+      <button data-r="1">⭐</button><button data-r="2">⭐</button><button data-r="3">⭐</button>
+      <button data-r="4">⭐</button><button data-r="5">⭐</button>
+    </div>
+    <textarea id="ratingComment" class="input" placeholder="Anything we can improve? (optional)" rows="3"></textarea>
+    <button class="btn" id="ratingSubmit">Send feedback</button>
+    <button class="btn ghost" id="ratingSkip">Not now</button>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <header class="topbar">
+    <div class="brand">📸 SnapID</div>
+    <div class="topbar-right">
+      <div id="statusPill" class="status-pill">Active</div>
+      <button id="menuBtn" class="menu-btn">⋯</button>
+    </div>
+  </header>
+  <div id="menuDropdown" class="menu-dropdown hidden">
+    <div id="menuEmail" class="menu-item muted">Account</div>
+    <button class="menu-item" id="menuDocs">📁 My Documents</button>
+    <button class="menu-item" id="menuLogout">Log out</button>
+  </div>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="passport">🪪<span>Passport</span></button>
+    <button class="tab" data-tab="signature">✍️<span>Signature</span></button>
+    <button class="tab" data-tab="scan">📄<span>Scan</span></button>
+    <button class="tab" data-tab="nin">🆔<span>NIN</span></button>
+    <button class="tab" data-tab="cv">📝<span>CV</span></button>
+  </nav>
+
+  <main class="content">
+    <section class="panel active" id="panel-passport">
+      <h2>Passport Maker</h2>
+      <div class="upload-options">
+        <button class="upload-option-btn" id="ppCameraBtn"><span class="upload-icon">📷</span><span class="upload-label">Take Photo</span></button>
+        <label class="upload-option-btn"><span class="upload-icon">🖼️</span><span class="upload-label">Upload</span><input type="file" id="ppFile" accept="image/*" hidden /></label>
+      </div>
+      <select id="ppSpec" class="select">
+        <option value="2x2">Standard Passport 2x2</option>
+        <option value="jamb">JAMB</option>
+        <option value="usvisa">US Visa</option>
+      </select>
+      <button class="btn" id="ppGo">Generate Passport</button>
+      <div class="result" id="ppResult"></div>
+    </section>
+
+    <section class="panel" id="panel-signature">
+      <h2>Signature Maker</h2>
+      <canvas id="sigCanvas" width="320" height="160"></canvas>
+      <div class="row"><button class="btn ghost" id="sigClear">Clear</button></div>
+      <button class="btn" id="sigGo">Generate Signature</button>
+      <div class="result" id="sigResult"></div>
+    </section>
+
+    <section class="panel" id="panel-scan">
+      <h2>Document Scanner</h2>
+      <div class="upload-options">
+        <button class="upload-option-btn" id="scanCameraBtn"><span class="upload-icon">📷</span><span class="upload-label">Camera</span></button>
+        <label class="upload-option-btn"><span class="upload-icon">🖼️</span><span class="upload-label">Upload</span><input type="file" id="scanFile" accept="image/*" hidden /></label>
+      </div>
+      <button class="btn" id="scanGo">Scan &amp; PDF</button>
+      <div class="result" id="scanResult"></div>
+    </section>
+
+    <section class="panel" id="panel-nin">
+      <h2>NIN Photo</h2>
+      <div class="upload-options">
+        <button class="upload-option-btn" id="ninCameraBtn"><span class="upload-icon">📷</span><span class="upload-label">Camera</span></button>
+        <label class="upload-option-btn"><span class="upload-icon">🖼️</span><span class="upload-label">Upload</span><input type="file" id="ninFile" accept="image/*" hidden /></label>
+      </div>
+      <button class="btn" id="ninGo">Extract Photo</button>
+      <div class="result" id="ninResult"></div>
+    </section>
+
+    <section class="panel" id="panel-cv">
+      <h2>CV → PDF</h2>
+      <input class="input" id="cvName" placeholder="Full name" />
+      <input class="input" id="cvEmail" placeholder="Email" />
+      <input class="input" id="cvPhone" placeholder="Phone" />
+      <textarea class="input" id="cvSummary" placeholder="Summary" rows="2"></textarea>
+      <textarea class="input" id="cvExperience" placeholder="Experience" rows="3"></textarea>
+      <textarea class="input" id="cvEducation" placeholder="Education" rows="2"></textarea>
+      <textarea class="input" id="cvSkills" placeholder="Skills" rows="2"></textarea>
+      <button class="btn" id="cvGo">Generate CV</button>
+      <div class="result" id="cvResult"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <button class="link" id="supportBtn">💬 Support</button>
+    <button class="link" id="renewBtn">🔄 Renew</button>
+  </footer>
+</div>
+
+<div id="loader" class="loader hidden"><div class="spinner"></div><div id="loaderText">Processing…</div></div>
+<script src="app.js"></script>
+</body>
+  </html>
