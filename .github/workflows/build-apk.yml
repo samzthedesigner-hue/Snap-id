@@ -1,15 +1,22 @@
-name: Build APK
+name: Build APK & Keep Alive
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
+  schedule:
+    # Runs every 14 minutes, but only between 7 AM and 9 PM UTC (adjust if needed)
+    - cron: '*/14 7-21 * * *'
 
 permissions:
   contents: write
 
 jobs:
+  # ==========================================
+  # JOB 1: BUILD THE APK (Runs on push/manual)
+  # ==========================================
   build:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
     steps:
@@ -97,3 +104,15 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ==========================================
+  # JOB 2: KEEP RENDER ALIVE (Runs on schedule)
+  # ==========================================
+  keep-alive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Backend
+        run: |
+          curl -s https://snap-id.onrender.com/wake > /dev/null
+          echo "Pinged Render successfully to keep it awake."
