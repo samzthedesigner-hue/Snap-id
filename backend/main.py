@@ -16,9 +16,9 @@ ACCOUNT_NUMBER = os.environ.get("ACCOUNT_NUMBER", "6964461874")
 ACCOUNT_NAME = os.environ.get("ACCOUNT_NAME", "Obadimeji Samuel Oluwasogo")
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev-only-change-me")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://snapid.vercel.app")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://snap-id-www.vercel.app")
 
-# Database Connection (Hardcoded with URL-encoded password)
+# Database Connection
 DATABASE_URL = "postgresql://postgres.icyfdieojdcbswqjfmbu:UZ%7D%2Ek%3C%7C%2B32GN4%60f%3A%22%2AWw0JjZ%3Eyu1ReTY@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
 
 OWNER_EMAIL = "samuelobadimeji500@gmail.com"
@@ -53,37 +53,24 @@ def db_init():
         cur.execute("""CREATE TABLE IF NOT EXISTS used_receipts (hash TEXT PRIMARY KEY, created_at DOUBLE PRECISION)""")
         cur.execute("""CREATE TABLE IF NOT EXISTS user_activity (user_id BIGINT PRIMARY KEY, last_active DOUBLE PRECISION, winback_sent BOOLEAN DEFAULT FALSE)""")
         cur.execute("""CREATE TABLE IF NOT EXISTS ratings (id BIGSERIAL PRIMARY KEY, stars INT NOT NULL, comment TEXT, device_id TEXT, created_at DOUBLE PRECISION)""")
-        cur.close()
-        conn.close()
+        cur.close(); conn.close()
     except Exception as e:
         print(f"Database initialization error: {e}")
 
 db_init()
 
 def db_fetch_one(sql, params=()):
-    conn, cf = _pg()
-    cur = conn.cursor(cursor_factory=cf)
-    cur.execute(sql, params)
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
+    conn, cf = _pg(); cur = conn.cursor(cursor_factory=cf)
+    cur.execute(sql, params); row = cur.fetchone(); cur.close(); conn.close()
     return dict(row) if row else None
 
 def db_fetch_all(sql, params=()):
-    conn, cf = _pg()
-    cur = conn.cursor(cursor_factory=cf)
-    cur.execute(sql, params)
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
+    conn, cf = _pg(); cur = conn.cursor(cursor_factory=cf)
+    cur.execute(sql, params); rows = cur.fetchall(); cur.close(); conn.close()
     return [dict(r) for r in rows]
 
 def db_execute(sql, params=()):
-    conn, _ = _pg()
-    cur = conn.cursor()
-    cur.execute(sql, params)
-    cur.close()
-    conn.close()
+    conn, _ = _pg(); cur = conn.cursor(); cur.execute(sql, params); cur.close(); conn.close()
 
 # ============================================================
 # HELPERS
@@ -123,6 +110,17 @@ def send_email(to, subject, html_content):
     except: pass
 
 # ============================================================
+# LAZY ML MODELS
+# ============================================================
+_easyocr_reader = None
+def get_ocr():
+    global _easyocr_reader
+    if _easyocr_reader is None:
+        import easyocr
+        _easyocr_reader = easyocr.Reader(["en"], gpu=False)
+    return _easyocr_reader
+
+# ============================================================
 # APP
 # ============================================================
 app = FastAPI()
@@ -137,7 +135,6 @@ async def error_handler(request, call_next):
 
 @app.get("/")
 def root(): return {"status": "ok"}
-
 @app.get("/wake")
 def wake(): return {"awake": True}
 
@@ -171,9 +168,7 @@ def verify_token_or_free(tool):
 
         if authorization and authorization.startswith("Bearer "):
             try:
-                payload = verify_token(authorization, x_device_id, x_session)
-                payload["_free"] = False
-                return payload
+                payload = verify_token(authorization, x_device_id, x_session); payload["_free"] = False; return payload
             except HTTPException as e:
                 if "expired" in str(e.detail).lower(): raise
                 
@@ -211,15 +206,11 @@ async def login(email: str = Form(...), password: str = Form(...), device_id: st
     plan_row = db_fetch_one("SELECT plan, expires_at FROM plans WHERE user_id=%s AND expires_at>%s ORDER BY expires_at DESC LIMIT 1", (user["id"], time.time()))
     at = kt = ems = pname = None
     if email == OWNER_EMAIL:
-        exp_ts = int(time.time()) + (3650 * 24 * 3600)
-        pname = "Owner"
-        at, kt = _issue_tokens(device_id, user["id"], pname, exp_ts)
-        ems = exp_ts * 1000
+        exp_ts = int(time.time()) + (3650 * 24 * 3600); pname = "Owner"
+        at, kt = _issue_tokens(device_id, user["id"], pname, exp_ts); ems = exp_ts * 1000
     elif plan_row:
-        exp_ts = int(plan_row["expires_at"])
-        pname = plan_row["plan"]
-        at, kt = _issue_tokens(device_id, user["id"], pname, exp_ts)
-        ems = exp_ts * 1000
+        exp_ts = int(plan_row["expires_at"]); pname = plan_row["plan"]
+        at, kt = _issue_tokens(device_id, user["id"], pname, exp_ts); ems = exp_ts * 1000
     return {"ok": True, "email": user["email"], "session_token": token, "activate_token": at, "kill_token": kt, "expires_at": ems, "plan": pname}
 
 @app.post("/forgot-password")
@@ -283,8 +274,7 @@ def _to_bytes(img, fmt="PNG", quality=95):
 def _compress(img, target_kb, fmt="JPEG"):
     lo, hi, best = 10, 95, None
     for _ in range(8):
-        q = (lo + hi) // 2
-        data = _to_bytes(img, fmt=fmt, quality=q)
+        q = (lo + hi) // 2; data = _to_bytes(img, fmt=fmt, quality=q)
         if len(data) / 1024 <= target_kb: best = data; lo = q + 1
         else: hi = q - 1
     return best or _to_bytes(img, fmt=fmt, quality=10)
@@ -371,8 +361,38 @@ async def verify_receipt(file: UploadFile = File(...), plan: str = Form(...), de
     if plan not in PLANS: raise HTTPException(400, "Invalid plan")
     expected = PLANS[plan]["price"]; duration = PLANS[plan]["seconds"]
     raw = await file.read(); h = hashlib.sha256(raw).hexdigest()
-    if db_fetch_one("SELECT 1 FROM used_receipts WHERE hash=%s", (h,)): raise HTTPException(400, "Receipt used.")
     
+    if db_fetch_one("SELECT 1 FROM used_receipts WHERE hash=%s", (h,)): 
+        raise HTTPException(400, "This receipt has already been used.")
+
+    # --- OCR VERIFICATION ---
+    try:
+        arr = np.frombuffer(raw, np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        reader = get_ocr()
+        results = reader.readtext(img, detail=0)
+        text = " ".join(results).lower()
+        
+        # 1. Check Amount (e.g., "1500" or "1,500")
+        amounts = [float(n.replace(",", "")) for n in re.findall(r"\d{3,7}(?:\.\d{1,2})?", text)]
+        amount_ok = any(abs(a - expected) < 1.0 for a in amounts)
+        if not amount_ok: raise HTTPException(400, f"Amount ₦{expected} not found in receipt.")
+
+        # 2. Check Destination Account Number
+        digits_only = "".join(ch for ch in text if ch.isdigit())
+        if ACCOUNT_NUMBER not in digits_only:
+            raise HTTPException(400, "Destination account number not found in receipt.")
+
+        # 3. Check for Status
+        if not any(w in text for w in ["successful", "completed", "success", "paid"]):
+            raise HTTPException(400, "Receipt does not show a 'Successful' status.")
+
+    except HTTPException: raise
+    except Exception as e:
+        print("OCR Error:", e)
+        raise HTTPException(400, "Could not read receipt. Please upload a clearer screenshot.")
+
+    # --- IF VALID, SAVE AND ISSUE TOKEN ---
     db_execute("INSERT INTO used_receipts(hash, created_at) VALUES (%s,%s)", (h, time.time()))
     now = int(time.time()); exp = now + duration
     user_id = None
@@ -382,11 +402,12 @@ async def verify_receipt(file: UploadFile = File(...), plan: str = Form(...), de
             user_id = sess["user_id"]
             db_execute("UPDATE plans SET expires_at=%s WHERE user_id=%s AND expires_at>%s", (now, user_id, now))
             db_execute("INSERT INTO plans(user_id, plan, expires_at, receipt_hash, created_at) VALUES (%s,%s,%s,%s,%s)", (user_id, plan, float(exp), h, time.time()))
+            
     act, kill = _issue_tokens(device_id, user_id, plan, exp)
     return {"ok": True, "activate_token": act, "kill_token": kill, "expires_at": exp * 1000, "plan": plan}
 
 # ============================================================
-# RUN SERVER (Must be at the very bottom, no indentation)
+# RUN SERVER
 # ===========================================================
 if __name__ == "__main__":
     import uvicorn
