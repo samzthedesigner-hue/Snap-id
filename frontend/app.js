@@ -88,28 +88,23 @@ async function boot() {
 
     const session = localStorage.getItem(LS_SESSION);
     
-    // 1. If no session, show login screen immediately
     if (!session) {
       showLoginScreen();
       wireUi(); 
       return;
     }
 
-    // 2. If session exists, check who it is
     const r = await fetch(APP_CONFIG.BACKEND_URL + "/me", { headers: { "X-Session": session } });
     
     if (r.ok) {
       const d = await r.json();
-      
       localStorage.setItem("__email", d.email);
       $("menuEmail").textContent = d.email;
 
-      // 👑 OWNER CHECK: If it's your email, unlock immediately
       if (d.email === APP_CONFIG.OWNER_EMAIL) {
         $("splash").style.display = "none";
         unlockApp();
       } 
-      // Normal user with active plan
       else if (d.expires_at) { 
         localStorage.setItem(LS_EXP, String(d.expires_at)); 
         localStorage.setItem(LS_PLAN, d.plan); 
@@ -117,19 +112,16 @@ async function boot() {
         unlockApp(); 
         scheduleExpiry(d.expires_at); 
       } 
-      // Normal user with no plan (free mode)
       else { 
         $("splash").style.display = "none";
         unlockApp(); 
       }
     } else { 
-      // Session expired or invalid
       localStorage.removeItem(LS_SESSION); 
       showLoginScreen(); 
     }
   } catch (error) {
     console.error("Boot error:", error);
-    // If server is asleep or errors, fallback to login screen
     showLoginScreen(); 
   }
   
@@ -155,16 +147,17 @@ function showForm(type) {
 async function doLogin() {
   const email = $("loginEmail").value.trim(), password = $("loginPassword").value, status = $("loginStatus");
   if (password.length < 16) { status.textContent = "Password must be at least 16 characters."; return; }
-  status.textContent = "Logging in...";
+  status.style.color = "#fbbf24";
+  status.textContent = "Connecting to server (this may take up to 30s)...";
+  
   const fd = new FormData(); fd.append("email", email); fd.append("password", password); fd.append("device_id", await getDeviceId());
   try {
     const r = await fetch(APP_CONFIG.BACKEND_URL + "/login", { method: "POST", body: fd });
     const data = await r.json();
-    if (!r.ok) { status.textContent = data.detail || "Failed"; return; }
+    if (!r.ok) { status.style.color = "#ef4444"; status.textContent = data.detail || "Failed"; return; }
     localStorage.setItem(LS_SESSION, data.session_token); localStorage.setItem("__email", data.email);
     $("menuEmail").textContent = data.email;
     
-    // Owner Bypass on Login
     if (data.email === APP_CONFIG.OWNER_EMAIL) { 
       if (data.activate_token) localStorage.setItem(LS_ACT, data.activate_token); 
       unlockApp(); 
@@ -175,28 +168,29 @@ async function doLogin() {
       localStorage.setItem(LS_ACT, data.activate_token); localStorage.setItem(LS_EXP, String(data.expires_at)); localStorage.setItem(LS_PLAN, data.plan);
       unlockApp(); scheduleExpiry(data.expires_at);
     } else { unlockApp(); }
-  } catch (_) { status.textContent = "Network error"; }
+  } catch (_) { status.style.color = "#ef4444"; status.textContent = "Network error"; }
 }
 
 async function doRegister() {
   const email = $("loginEmail").value.trim(), password = $("loginPassword").value, status = $("loginStatus");
   if (password.length < 16) { status.textContent = "Password must be at least 16 characters."; return; }
-  status.textContent = "Creating account...";
+  status.style.color = "#fbbf24";
+  status.textContent = "Waking up server (this may take up to 30s)...";
+  
   const fd = new FormData(); fd.append("email", email); fd.append("password", password); fd.append("device_id", await getDeviceId());
   try {
     const r = await fetch(APP_CONFIG.BACKEND_URL + "/register", { method: "POST", body: fd });
     const data = await r.json();
-    if (!r.ok) { status.textContent = data.detail || "Failed"; return; }
+    if (!r.ok) { status.style.color = "#ef4444"; status.textContent = data.detail || "Failed"; return; }
     localStorage.setItem(LS_SESSION, data.session_token); localStorage.setItem("__email", data.email);
     $("menuEmail").textContent = data.email;
     
-    // If the owner registers, bypass paywall immediately
     if (data.email === APP_CONFIG.OWNER_EMAIL) {
        unlockApp();
     } else {
        lockApp();
     }
-  } catch (_) { status.textContent = "Network error"; }
+  } catch (_) { status.style.color = "#ef4444"; status.textContent = "Network error"; }
 }
 
 // ---------- MY DOCUMENTS ----------
@@ -404,7 +398,7 @@ function wireUi() {
   c.onmouseup = c.ontouchend = () => draw = false;
   $("sigClear").onclick = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 320, 160); };
   
-  $("receiptInput").onchange = async e => {
+   $("receiptInput").onchange = async e => {
     const f = e.target.files[0]; if (!f || !selectedPlan) return;
     showLoader("Verifying..."); const fd = new FormData(); fd.append("file", f); fd.append("plan", selectedPlan); fd.append("device_id", await getDeviceId()); fd.append("session", localStorage.getItem(LS_SESSION));
     try {
@@ -414,4 +408,4 @@ function wireUi() {
       unlockApp(); scheduleExpiry(data.expires_at);
     } catch (_) { hideLoader(); alert("Error"); }
   };
-    }
+                                                                                                                            }
