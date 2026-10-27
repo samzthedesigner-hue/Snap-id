@@ -32,8 +32,8 @@
   </div>
   
   <div id="authButtons">
-    <button class="btn" onclick="showForm('login')">Log In</button>
-    <button class="btn secondary" onclick="showForm('register')">Create Account</button>
+    <button class="btn" id="btnShowLogin">Log In</button>
+    <button class="btn secondary" id="btnShowRegister">Create Account</button>
   </div>
 
   <div id="authForm" class="hidden" style="margin-top:20px;">
@@ -43,7 +43,7 @@
     <button class="btn" id="loginBtn">Log In</button>
     <button class="btn secondary" id="registerBtn">Create Account</button>
     <button class="btn ghost" id="forgotBtn">Forgot password?</button>
-    <button class="btn ghost" onclick="document.getElementById('authForm').classList.add('hidden'); document.getElementById('authButtons').classList.remove('hidden');">Back</button>
+    <button class="btn ghost" id="backToAuthBtn">Back</button>
   </div>
 </div>
 
