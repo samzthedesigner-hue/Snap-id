@@ -147,14 +147,22 @@ function showForm(type) {
 async function doLogin() {
   const email = $("loginEmail").value.trim(), password = $("loginPassword").value, status = $("loginStatus");
   if (password.length < 16) { status.textContent = "Password must be at least 16 characters."; return; }
+  
   status.style.color = "#fbbf24";
-  status.textContent = "Connecting to server (this may take up to 30s)...";
+  status.textContent = "Waking up server (this may take up to 60s)...";
   
   const fd = new FormData(); fd.append("email", email); fd.append("password", password); fd.append("device_id", await getDeviceId());
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000);
+
   try {
-    const r = await fetch(APP_CONFIG.BACKEND_URL + "/login", { method: "POST", body: fd });
+    const r = await fetch(APP_CONFIG.BACKEND_URL + "/login", { method: "POST", body: fd, signal: controller.signal });
+    clearTimeout(timeoutId);
+    
     const data = await r.json();
     if (!r.ok) { status.style.color = "#ef4444"; status.textContent = data.detail || "Failed"; return; }
+    
     localStorage.setItem(LS_SESSION, data.session_token); localStorage.setItem("__email", data.email);
     $("menuEmail").textContent = data.email;
     
@@ -168,20 +176,35 @@ async function doLogin() {
       localStorage.setItem(LS_ACT, data.activate_token); localStorage.setItem(LS_EXP, String(data.expires_at)); localStorage.setItem(LS_PLAN, data.plan);
       unlockApp(); scheduleExpiry(data.expires_at);
     } else { unlockApp(); }
-  } catch (_) { status.style.color = "#ef4444"; status.textContent = "Network error"; }
+  } catch (error) { 
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      status.style.color = "#ef4444"; status.textContent = "Server took too long. Please try again."; 
+    } else {
+      status.style.color = "#ef4444"; status.textContent = "Network error"; 
+    }
+  }
 }
 
 async function doRegister() {
   const email = $("loginEmail").value.trim(), password = $("loginPassword").value, status = $("loginStatus");
   if (password.length < 16) { status.textContent = "Password must be at least 16 characters."; return; }
+  
   status.style.color = "#fbbf24";
-  status.textContent = "Waking up server (this may take up to 30s)...";
+  status.textContent = "Waking up server (this may take up to 60s)...";
   
   const fd = new FormData(); fd.append("email", email); fd.append("password", password); fd.append("device_id", await getDeviceId());
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000);
+
   try {
-    const r = await fetch(APP_CONFIG.BACKEND_URL + "/register", { method: "POST", body: fd });
+    const r = await fetch(APP_CONFIG.BACKEND_URL + "/register", { method: "POST", body: fd, signal: controller.signal });
+    clearTimeout(timeoutId);
+    
     const data = await r.json();
     if (!r.ok) { status.style.color = "#ef4444"; status.textContent = data.detail || "Failed"; return; }
+    
     localStorage.setItem(LS_SESSION, data.session_token); localStorage.setItem("__email", data.email);
     $("menuEmail").textContent = data.email;
     
@@ -190,7 +213,14 @@ async function doRegister() {
     } else {
        lockApp();
     }
-  } catch (_) { status.style.color = "#ef4444"; status.textContent = "Network error"; }
+  } catch (error) { 
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      status.style.color = "#ef4444"; status.textContent = "Server took too long. Please try again."; 
+    } else {
+      status.style.color = "#ef4444"; status.textContent = "Network error"; 
+    }
+  }
 }
 
 // ---------- MY DOCUMENTS ----------
@@ -357,7 +387,6 @@ function maybeShowRating() {
 
 // ---------- UI WIRING ----------
 function wireUi() {
-  // Safely attach the login/register buttons
   if ($("btnShowLogin")) $("btnShowLogin").onclick = () => showForm('login');
   if ($("btnShowRegister")) $("btnShowRegister").onclick = () => showForm('register');
   if ($("backToAuthBtn")) $("backToAuthBtn").onclick = () => {
@@ -417,4 +446,4 @@ function wireUi() {
       unlockApp(); scheduleExpiry(data.expires_at);
     } catch (_) { hideLoader(); alert("Error"); }
   };
-    }
+}
