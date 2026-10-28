@@ -283,10 +283,14 @@ def _compress(img, target_kb, fmt="JPEG"):
 async def passport(file: UploadFile = File(...), spec: str = Form("2x2"), auth=Depends(verify_token_or_free("passport"))):
     raw = await file.read(); src = _read(raw).convert("RGB")
     try:
-        from rembg import remove
-        cut = remove(src, session=None)
+        from rembg import remove, new_session
+        # Use the smaller, faster u2netp model to speed up cold starts
+        session = new_session("u2netp")
+        cut = remove(src, session=session)
         if isinstance(cut, bytes): cut = Image.open(io.BytesIO(cut))
-    except: cut = src
+    except Exception as e:
+        print("rembg failed:", e)
+        cut = src
     bg = Image.new("RGBA", cut.size, (255, 255, 255, 255)); bg.alpha_composite(cut.convert("RGBA")); img = bg.convert("RGB")
     w, h, max_kb = PASSPORT_SPECS.get(spec, PASSPORT_SPECS["2x2"])
     img = ImageOps.fit(img, (w, h), method=Image.LANCZOS); data = _compress(img, max_kb)
