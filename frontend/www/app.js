@@ -45,11 +45,9 @@ function showLoginScreen() {
   $("loginScreen").classList.remove("hidden");
 }
 
-// ---------- STEALTH WAKE (BACKGROUND) ----------
+// ---------- STEALTH WAKE ----------
 async function stealthWake() {
-  try {
-    await fetch(APP_CONFIG.BACKEND_URL + "/wake");
-  } catch (_) {}
+  try { await fetch(APP_CONFIG.BACKEND_URL + "/wake"); } catch (_) {}
 }
 
 // ---------- AUTO UPDATER ----------
@@ -58,12 +56,10 @@ async function checkForUpdates() {
     const res = await fetch(`https://api.github.com/repos/${APP_CONFIG.GITHUB_USER}/${APP_CONFIG.GITHUB_REPO}/releases/latest`);
     if (!res.ok) return;
     const data = await res.json();
-    
     const remoteVersion = parseInt(data.tag_name.replace("v1.0.", ""), 10);
     const currentVersion = parseInt(localStorage.getItem("__app_version") || "0", 10);
     const apkAsset = data.assets.find(a => a.name.endsWith(".apk"));
     if (!apkAsset) return;
-
     if (remoteVersion > currentVersion) {
       const modal = document.createElement("div"); modal.className = "modal";
       modal.innerHTML = `
@@ -85,46 +81,21 @@ async function boot() {
   try {
     stealthWake();
     checkForUpdates();
-
     const session = localStorage.getItem(LS_SESSION);
-    
-    if (!session) {
-      showLoginScreen();
-      wireUi(); 
-      return;
-    }
+    if (!session) { showLoginScreen(); wireUi(); return; }
 
     const r = await fetch(APP_CONFIG.BACKEND_URL + "/me", { headers: { "X-Session": session } });
-    
     if (r.ok) {
       const d = await r.json();
       localStorage.setItem("__email", d.email);
       $("menuEmail").textContent = d.email;
-
-      if (d.email === APP_CONFIG.OWNER_EMAIL) {
-        $("splash").style.display = "none";
-        unlockApp();
-      } 
+      if (d.email === APP_CONFIG.OWNER_EMAIL) { $("splash").style.display = "none"; unlockApp(); } 
       else if (d.expires_at) { 
-        localStorage.setItem(LS_EXP, String(d.expires_at)); 
-        localStorage.setItem(LS_PLAN, d.plan); 
-        $("splash").style.display = "none";
-        unlockApp(); 
-        scheduleExpiry(d.expires_at); 
-      } 
-      else { 
-        $("splash").style.display = "none";
-        unlockApp(); 
-      }
-    } else { 
-      localStorage.removeItem(LS_SESSION); 
-      showLoginScreen(); 
-    }
-  } catch (error) {
-    console.error("Boot error:", error);
-    showLoginScreen(); 
-  }
-  
+        localStorage.setItem(LS_EXP, String(d.expires_at)); localStorage.setItem(LS_PLAN, d.plan); 
+        $("splash").style.display = "none"; unlockApp(); scheduleExpiry(d.expires_at); 
+      } else { $("splash").style.display = "none"; unlockApp(); }
+    } else { localStorage.removeItem(LS_SESSION); showLoginScreen(); }
+  } catch (error) { showLoginScreen(); }
   wireUi();
 }
 document.addEventListener("DOMContentLoaded", boot);
@@ -144,22 +115,40 @@ function showForm(type) {
   }
 }
 
+// 🚨 FORCED WAIT FOR RENDER WAKE UP
+async function robustFetch(url, body, statusEl) {
+  let attempts = 0;
+  while (attempts < 3) {
+    try {
+      statusEl.textContent = attempts === 0 ? "Waking up server (up to 60s)..." : "Still waking up (please wait)...";
+      const r = await fetch(url, { method: "POST", body: body });
+      
+      // If Render is awake but throwing a gateway error, retry
+      if (r.status === 502 || r.status === 504) {
+        attempts++;
+        await new Promise(res => setTimeout(res, 5000)); // wait 5s before retry
+        continue;
+      }
+      
+      return r; // Success or a real error (like 401 Wrong Password)
+    } catch (e) {
+      // If it's a hard network error (server dropped), retry
+      attempts++;
+      await new Promise(res => setTimeout(res, 5000));
+    }
+  }
+  throw new Error("Network error - server didn't respond in time");
+}
+
 async function doLogin() {
   const email = $("loginEmail").value.trim(), password = $("loginPassword").value, status = $("loginStatus");
   if (password.length < 16) { status.textContent = "Password must be at least 16 characters."; return; }
   
-  status.style.color = "#fbbf24";
-  status.textContent = "Waking up server (this may take up to 60s)...";
-  
   const fd = new FormData(); fd.append("email", email); fd.append("password", password); fd.append("device_id", await getDeviceId());
   
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 90000);
-
   try {
-    const r = await fetch(APP_CONFIG.BACKEND_URL + "/login", { method: "POST", body: fd, signal: controller.signal });
-    clearTimeout(timeoutId);
-    
+    status.style.color = "#fbbf24";
+    const r = await robustFetch(APP_CONFIG.BACKEND_URL + "/login", fd, status);
     const data = await r.json();
     if (!r.ok) { status.style.color = "#ef4444"; status.textContent = data.detail || "Failed"; return; }
     
@@ -168,21 +157,14 @@ async function doLogin() {
     
     if (data.email === APP_CONFIG.OWNER_EMAIL) { 
       if (data.activate_token) localStorage.setItem(LS_ACT, data.activate_token); 
-      unlockApp(); 
-      return; 
+      unlockApp(); return; 
     }
-    
     if (data.activate_token) {
       localStorage.setItem(LS_ACT, data.activate_token); localStorage.setItem(LS_EXP, String(data.expires_at)); localStorage.setItem(LS_PLAN, data.plan);
       unlockApp(); scheduleExpiry(data.expires_at);
     } else { unlockApp(); }
   } catch (error) { 
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      status.style.color = "#ef4444"; status.textContent = "Server took too long. Please try again."; 
-    } else {
-      status.style.color = "#ef4444"; status.textContent = "Network error"; 
-    }
+    status.style.color = "#ef4444"; status.textContent = error.message; 
   }
 }
 
@@ -190,36 +172,20 @@ async function doRegister() {
   const email = $("loginEmail").value.trim(), password = $("loginPassword").value, status = $("loginStatus");
   if (password.length < 16) { status.textContent = "Password must be at least 16 characters."; return; }
   
-  status.style.color = "#fbbf24";
-  status.textContent = "Waking up server (this may take up to 60s)...";
-  
   const fd = new FormData(); fd.append("email", email); fd.append("password", password); fd.append("device_id", await getDeviceId());
   
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 90000);
-
   try {
-    const r = await fetch(APP_CONFIG.BACKEND_URL + "/register", { method: "POST", body: fd, signal: controller.signal });
-    clearTimeout(timeoutId);
-    
+    status.style.color = "#fbbf24";
+    const r = await robustFetch(APP_CONFIG.BACKEND_URL + "/register", fd, status);
     const data = await r.json();
     if (!r.ok) { status.style.color = "#ef4444"; status.textContent = data.detail || "Failed"; return; }
     
     localStorage.setItem(LS_SESSION, data.session_token); localStorage.setItem("__email", data.email);
     $("menuEmail").textContent = data.email;
     
-    if (data.email === APP_CONFIG.OWNER_EMAIL) {
-       unlockApp();
-    } else {
-       lockApp();
-    }
+    if (data.email === APP_CONFIG.OWNER_EMAIL) { unlockApp(); } else { lockApp(); }
   } catch (error) { 
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      status.style.color = "#ef4444"; status.textContent = "Server took too long. Please try again."; 
-    } else {
-      status.style.color = "#ef4444"; status.textContent = "Network error"; 
-    }
+    status.style.color = "#ef4444"; status.textContent = error.message; 
   }
 }
 
